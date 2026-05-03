@@ -1,0 +1,189 @@
+{{- define "code-swarm.api_gateway" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-api-gateway
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+    component: api-gateway
+spec:
+  replicas: {{ .Values.api_gateway.replicas }}
+  selector:
+    matchLabels:
+      {{- include "code-swarm.selectorLabels" . | nindent 6 }}
+      component: api-gateway
+  template:
+    metadata:
+      labels:
+        {{- include "code-swarm.selectorLabels" . | nindent 8 }}
+        component: api-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "code-swarm.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api-gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+          env:
+            - name: RATE_LIMIT_RPS
+              value: "{{ .Values.api_gateway.env.RATE_LIMIT_RPS }}"
+            - name: GRPC_PORT
+              value: "{{ .Values.api_gateway.env.GRPC_PORT }}"
+            - name: TZ
+              value: "{{ .Values.api_gateway.env.TZ }}"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.api_gateway.resources | nindent 12 }}
+      {{- with .Values.api_gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api_gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+
+{{- define "code-swarm.agent_workers" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-agent-workers
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+    component: agent-workers
+spec:
+  replicas: {{ .Values.agent_workers.replicas }}
+  selector:
+    matchLabels:
+      {{- include "code-swarm.selectorLabels" . | nindent 6 }}
+      component: agent-workers
+  template:
+    metadata:
+      labels:
+        {{- include "code-swarm.selectorLabels" . | nindent 8 }}
+        component: agent-workers
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "code-swarm.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: agent-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: SIMONE_MCP_URL
+              value: "http://{{ include "code-swarm.fullname" . }}-simone-mcp:{{ .Values.simone_mcp.service.port }}"
+            - name: AGENT_MODEL
+              value: "{{ .Values.agent_workers.agents[0].model }}"
+          resources:
+            {{- toYaml .Values.agent_workers.resources | nindent 12 }}
+      {{- with .Values.agent_workers.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+
+{{- define "code-swarm.simone_mcp" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-simone-mcp
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+    component: simone-mcp
+spec:
+  replicas: {{ .Values.simone_mcp.replicas }}
+  selector:
+    matchLabels:
+      {{- include "code-swarm.selectorLabels" . | nindent 6 }}
+      component: simone-mcp
+  template:
+    metadata:
+      labels:
+        {{- include "code-swarm.selectorLabels" . | nindent 8 }}
+        component: simone-mcp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8234"
+    spec:
+      containers:
+        - name: simone-mcp
+          image: "{{ .Values.image.repository }}/simone-mcp:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: mcp
+              containerPort: 8234
+          env:
+            - name: BRIDGE_MODE
+              value: "{{ .Values.simone_mcp.config.bridge_mode }}"
+            - name: HEALTH_CHECK_INTERVAL
+              value: "{{ .Values.simone_mcp.config.health_check_interval }}"
+          resources:
+            {{- toYaml .Values.simone_mcp.resources | nindent 12 }}
+{{- end }}
+
+{{- define "code-swarm.websocket" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-websocket
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+    component: websocket
+spec:
+  replicas: {{ .Values.websocket.replicas }}
+  selector:
+    matchLabels:
+      {{- include "code-swarm.selectorLabels" . | nindent 6 }}
+      component: websocket
+  template:
+    metadata:
+      labels:
+        {{- include "code-swarm.selectorLabels" . | nindent 8 }}
+        component: websocket
+    spec:
+      containers:
+        - name: websocket-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: ws
+              containerPort: 8001
+          resources:
+            {{- toYaml .Values.websocket.resources | nindent 12 }}
+{{- end }}

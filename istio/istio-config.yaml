@@ -1,0 +1,108 @@
+apiVersion: install.istio.io/v1beta1
+kind: IstioOperator
+metadata:
+  name: code-swarm-istio
+  namespace: istio-system
+spec:
+  profile: ambient
+  meshConfig:
+    defaultConfig:
+      proxyMetadata:
+        ISTIO_META_DNS_CAPTURE: "true"
+        ISTIO_META_DNS_AUTO_ALLOCATE: "true"
+    enableAutoMtls: true
+  values:
+    global:
+      proxy:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+    ambient:
+      enabled: true
+      dataplaneMode: ambient
+    telemetry:
+      v2:
+        enabled: true
+        prometheus:
+          enabled: true
+          configOverride:
+            gateway:
+              metrics_level: detailed
+            sidecar:
+              metrics_level: detailed
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: code-swarm-destination-rules
+  namespace: code-swarm
+spec:
+  host: "*.code-swarm.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: UPGRADE
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+    loadBalancer:
+      simple: LEAST_REQUEST
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: AuthorizationPolicy
+metadata:
+  name: code-swarm-authz
+  namespace: code-swarm
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/code-swarm/sa/default
+      to:
+        - operation:
+            ports:
+              - "8000"
+              - "50051"
+              - "8234"
+    - from:
+        - source:
+            namespaces:
+              - istio-system
+      to:
+        - operation:
+            ports:
+              - "8000"
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: code-swarm-rate-limit
+  namespace: code-swarm
+spec:
+  workloadSelector:
+    labels:
+      component: api-gateway
+  filters:
+    - listenerMatch:
+        listenerType: SIDECAR_INBOUND
+        listenerProtocol: HTTP
+      filterName: envoy.filters.network.http_connection_manager
+      filterType: FILTER_NETWORK
+      insertPosition:
+        index: FIRST
+      filterConfig:
+        value:
+          rate_limits:
+            - actions:
+                - generic_key:
+                    descriptor_key: remote_ip
+                    descriptor_value: "50"

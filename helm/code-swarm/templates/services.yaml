@@ -1,0 +1,76 @@
+{{- define "code-swarm.api_gateway.service" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-api-gateway
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.api_gateway.service.type }}
+  ports:
+    - port: 8000
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 50051
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "code-swarm.selectorLabels" . | nindent 4 }}
+    component: api-gateway
+{{- end }}
+
+{{- define "code-swarm.agent_workers.service" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-agent-workers
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.agent_workers.service.type }}
+  ports:
+    - port: 9090
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "code-swarm.selectorLabels" . | nindent 4 }}
+    component: agent-workers
+{{- end }}
+
+{{- define "code-swarm.simone_mcp.service" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-simone-mcp
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.simone_mcp.service.type }}
+  ports:
+    - port: 8234
+      targetPort: mcp
+      protocol: TCP
+  selector:
+    {{- include "code-swarm.selectorLabels" . | nindent 4 }}
+    component: simone-mcp
+{{- end }}
+
+{{- define "code-swarm.websocket.service" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-websocket
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: ws
+      protocol: TCP
+  selector:
+    {{- include "code-swarm.selectorLabels" . | nindent 4 }}
+    component: websocket
+{{- end }}

@@ -1,0 +1,111 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-api-gateway-network-policy
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      component: api-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+        - podSelector:
+            matchLabels:
+              component: ingress
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 50051
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              component: agent-workers
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - podSelector:
+            matchLabels:
+              component: simone-mcp
+      ports:
+        - protocol: TCP
+          port: 8234
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-agent-workers-network-policy
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      component: agent-workers
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              component: api-gateway
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              component: simone-mcp
+      ports:
+        - protocol: TCP
+          port: 8234
+    - to:
+        podSelector:
+          matchLabels:
+            kubernetes.io/hostname: worker
+      ports:
+        - protocol: TCP
+          port: 2379-2380
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "code-swarm.fullname" . }}-simone-mcp-network-policy
+  labels:
+    {{- include "code-swarm.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      component: simone-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              component: api-gateway
+        - podSelector:
+            matchLabels:
+              component: agent-workers
+      ports:
+        - protocol: TCP
+          port: 8234
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
